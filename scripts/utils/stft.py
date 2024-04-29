@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import scipy
+import scipy.signal
 
 
 class STFT(nn.Module):
@@ -14,7 +15,7 @@ class STFT(nn.Module):
         self.n_overlap = self.win_size // self.hop_size
         self.requires_grad = requires_grad
 
-        win = torch.from_numpy(scipy.hamming(self.win_size).astype(np.float32))
+        win = torch.from_numpy(scipy.signal.windows.hann(self.win_size).astype(np.float32))
         win = F.relu(win)
         win = nn.Parameter(data=win, requires_grad=self.requires_grad)
         self.register_parameter('win', win)

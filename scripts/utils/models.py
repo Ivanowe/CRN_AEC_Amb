@@ -108,8 +108,8 @@ class Model(object):
         feeder = NetFeeder(self.device, self.win_size, self.hop_size)
 
         # training criterion and optimizer
-        criterion = LossFunction()
-        optimizer = Adam(net.parameters(), lr=self.lr, amsgrad=False)
+        criterion = LossFunction(self.device, self.win_size, self.hop_size)
+        optimizer = Adam(net.parameters(), lr=self.lr, amsgrad=True)
         scheduler = lr_scheduler.StepLR(optimizer, step_size=self.lr_decay_period, gamma=self.lr_decay_factor)
         
         # resume model if needed
@@ -280,7 +280,8 @@ class Model(object):
 
         if not os.path.isdir(self.ckpt_dir):
             os.makedirs(self.ckpt_dir)
-        logger = getLogger(os.path.join(self.ckpt_dir, 'test.log'), log_file=True)
+        logger = getLogger(os.path.join(self.ckpt_dir, 'test.log'), 
+                           log_file=True)
 
         # create a network
         net = Net()
@@ -290,10 +291,11 @@ class Model(object):
 
         # calculate model size
         param_count = numParams(net)
-        logger.info('Trainable parameter count: {:,d} -> {:.2f} MB\n'.format(param_count, param_count*32/8/(2**20)))
+        logger.info('Trainable parameter count: {:,d} -> {:.2f} MB\n'
+                    .format(param_count, param_count*32/8/(2**20)))
         
         # training criterion and optimizer
-        criterion = LossFunction()
+        criterion = LossFunction(self.device, self.win_size, self.hop_size)
         
         # net feeder
         feeder = NetFeeder(self.device, self.win_size, self.hop_size)
@@ -306,19 +308,29 @@ class Model(object):
         ckpt = CheckPoint()
         ckpt.load(self.model_file, self.device)
         net.load_state_dict(ckpt.net_state_dict)
-        logger.info('model info: epoch {}, iter {}, cv_loss - {:.4f}\n'.format(ckpt.ckpt_info['cur_epoch']+1,
+        logger.info('model info: epoch {}, iter {}, cv_loss - {:.4f}\n'
+                    .format(ckpt.ckpt_info['cur_epoch']+1,
             ckpt.ckpt_info['cur_iter']+1, ckpt.ckpt_info['cv_loss']))
         
         net.eval()
         for i in range(len(self.tt_list)):
             # create a data loader for testing
-            tt_loader = AudioLoader(self.tt_list[i], self.sample_rate, unit='utt',
-                                    segment_size=None, segment_shift=None,
-                                    batch_size=1, buffer_size=10,
-                                    in_norm=self.in_norm, mode='eval')
-            logger.info('[{}/{}] Estimating on {}'.format(i+1, len(self.tt_list), self.tt_list[i]))
+            tt_loader = AudioLoader(self.tt_list[i], 
+                                    self.sample_rate, 
+                                    unit='utt',
+                                    segment_size=None, 
+                                    segment_shift=None,
+                                    batch_size=1, 
+                                    buffer_size=10,
+                                    in_norm=self.in_norm, 
+                                    mode='eval')
+            logger.info('[{}/{}] Estimating on {}'
+                        .format(i+1, len(self.tt_list), self.tt_list[i]))
 
-            est_subdir = os.path.join(self.est_path, self.tt_list[i].split('/')[-1].replace('.ex', ''))
+            est_subdir = os.path.join(self.est_path, 
+                                      self.tt_list[i]
+                                      .split('/')[-1]
+                                      .replace('.hdf5', ''))
             if not os.path.isdir(est_subdir):
                 os.makedirs(est_subdir)
         
@@ -329,37 +341,62 @@ class Model(object):
                 sph = egs['sph']
                 n_samples = egs['n_samples']
 
-                n_frames = countFrames(n_samples, self.win_size, self.hop_size)
+                n_frames = countFrames(n_samples, 
+                                       self.win_size, 
+                                       self.hop_size)
                 
                 mix = mix.to(self.device)
+                
                 sph = sph.to(self.device)
 
                 feat, lbl = feeder(mix, sph)
-
+                
                 with torch.no_grad():
-                    loss_mask = lossMask(shape=lbl.shape, n_frames=n_frames, device=self.device)
+                    loss_mask = lossMask(shape=lbl.shape, 
+                                         n_frames=n_frames, 
+                                         device=self.device
+                                         )
                     est = net(feat)
-                    loss = criterion(est, lbl, loss_mask, n_frames)
+                    loss = loss = criterion(est, lbl, loss_mask, n_frames)
+
 
                 accu_tt_loss += loss.data.item() * sum(n_frames)
                 accu_n_frames += sum(n_frames)
-                   
+                
                 sph_idl = resynthesizer(lbl, mix)
                 sph_est = resynthesizer(est, mix)
-                
+            
                 # save estimates
                 mix = mix[0].cpu().numpy()
                 sph = sph[0].cpu().numpy()
                 sph_est = sph_est[0].cpu().numpy()
                 sph_idl = sph_idl[0].cpu().numpy()
-                mix, sph, sph_est, sph_idl = wavNormalize(mix, sph, sph_est, sph_idl)
-                sf.write(os.path.join(est_subdir, '{}_mix.wav'.format(k)), mix, self.sample_rate)
-                sf.write(os.path.join(est_subdir, '{}_sph.wav'.format(k)), sph, self.sample_rate)
-                sf.write(os.path.join(est_subdir, '{}_sph_est.wav'.format(k)), sph_est, self.sample_rate)
+                
+                # do not normalize!
+                # mix, sph, sph_est, sph_idl = wavNormalize(mix, 
+                #                                           sph, 
+                #                                           sph_est, 
+                #                                           sph_idl)
+                
+                sf.write(os.path.join(est_subdir,
+                                      '{}_mix.wav'.format(k)),
+                                      mix[0,:].T, 
+                                      self.sample_rate)
+                sf.write(os.path.join(est_subdir, 
+                                      '{}_sph.wav'.format(k)), 
+                                      sph.T, 
+                                      self.sample_rate)
+                sf.write(os.path.join(est_subdir, 
+                                      '{}_sph_est.wav'.format(k)), 
+                                      sph_est.T, 
+                                      self.sample_rate)
                 if self.write_ideal:
-                    sf.write(os.path.join(est_subdir, '{}_sph_idl.wav'.format(k)), sph_idl, self.sample_rate)
+                    sf.write(os.path.join(est_subdir, 
+                                          '{}_sph_idl.wav'.format(k)), 
+                                          sph_idl.T, 
+                                          self.sample_rate)
 
             avg_tt_loss = accu_tt_loss / accu_n_frames
-            logger.info('loss: {:.4f}'.format(avg_tt_loss))
+            logger.info('loss: {:.4f}\n'.format(avg_tt_loss))
 
         return

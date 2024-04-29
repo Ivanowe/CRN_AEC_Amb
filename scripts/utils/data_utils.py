@@ -16,8 +16,8 @@ class WavReader(object):
         if self.mode == 'train':
             self.wav_dict = {i: wavfile for i, wavfile in enumerate(in_file)}
         else:
-            reader = h5py.File(in_file, 'r')
-            self.wav_dict = {i: str(i) for i in range(len(reader))}
+            with h5py.File(in_file, 'r') as reader:
+                self.wav_dict = {i: key for i, key in enumerate(reader.keys())}
             reader.close()
         self.wav_indices = sorted(list(self.wav_dict.keys()))
 
@@ -62,7 +62,7 @@ class PerUttLoader(object):
             else:
                 utt_eg['mix'] = utt[0]
                 utt_eg['sph'] = utt[1]
-            utt_eg['n_samples'] = utt[0].shape[0]
+            utt_eg['n_samples'] = utt[0].shape[1]
             yield utt_eg
 
 
@@ -132,9 +132,9 @@ class AudioLoader(object):
                 idx = (idx + 1) % n_batches
             if self.unit == 'utt':
                 for batch in batch_queue:
-                    sig_len = max([eg['mix'].shape[0] for eg in batch])
+                    sig_len = max([eg['mix'].shape[1] for eg in batch])
                     for i in range(len(batch)):
-                        pad_size = sig_len - batch[i]['mix'].shape[0]
+                        pad_size = sig_len - batch[i]['mix'].shape[1]
                         batch[i]['mix'] = np.pad(batch[i]['mix'], [(0, pad_size)])
                         batch[i]['sph'] = np.pad(batch[i]['sph'], [(0, pad_size)])
             return batch_queue

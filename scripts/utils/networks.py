@@ -8,7 +8,7 @@ class Net(nn.Module):
     # Define class variables
     ch_in = 5
     ch_out = 1
-    ch_hid = 24
+    ch_hid = 64
     def __init__(self):
         super(Net, self).__init__()
         ch_in = Net.ch_in

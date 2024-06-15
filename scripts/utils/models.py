@@ -400,3 +400,7 @@ class Model(object):
             logger.info('loss: {:.4f}\n'.format(avg_tt_loss))
 
         return
+    
+    def save_model_state_dict(self, net, output_file):
+        torch.save(net.state_dict(), output_file)
+

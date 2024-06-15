@@ -58,6 +58,7 @@ class STFT(nn.Module):
         return window
 
     def stft(self, sig):
+        #sig = sig.float()
         batch_size = sig.shape[0]
         n_samples = sig.shape[1]
 
@@ -78,8 +79,8 @@ class STFT(nn.Module):
         spec_r = spec_r.transpose(-1, -2).contiguous()
         spec_i = spec_i.transpose(-1, -2).contiguous()
 
-        mag = torch.sqrt(spec_r**2 + spec_i**2)
-        pha = torch.atan2(spec_i.data, spec_r.data)
+        #mag = torch.sqrt(spec_r**2 + spec_i**2)
+        #pha = torch.atan2(spec_i.data, spec_r.data)
 
         return spec_r, spec_i
 

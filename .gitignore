@@ -1,0 +1,5 @@
+*.wav
+*.pyc
+*.DS_Store
+*.log
+*.pt
